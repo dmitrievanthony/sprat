@@ -7,7 +7,6 @@
 #include <sys/stat.h>
 
 #define DST_FILE_MODE 666
-
 int copy_file(char *src, char *dst) {
 	struct stat st;
 	int src_fd = open(src, O_RDONLY);
