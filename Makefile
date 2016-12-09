@@ -1,2 +1,4 @@
 all:
-	gcc -Wall -o sprat *.c
+	gcc -Wall -o sprat src/*.c src/*.h
+clean:
+	rm sprat

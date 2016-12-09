@@ -11,8 +11,7 @@ static char *generate_container_id();
 static int init_function(void *argv);
 
 #define STACK_SIZE  1024 * 1024
-#define CLONE_FLAGS CLONE_NEWPID | CLONE_NEWNS | SIGCHLD
-
+#define CLONE_FLAGS SIGCHLD | CLONE_NEWPID | CLONE_NEWNS
 container *start_container(char *image_name, char *init_script) {
 	container *c = malloc(sizeof(container));
 	c->image_name = image_name;
@@ -20,6 +19,9 @@ container *start_container(char *image_name, char *init_script) {
 	c->id = generate_container_id();
 	char *stack = malloc(STACK_SIZE);
 	c->pid = clone(init_function, stack + STACK_SIZE, CLONE_FLAGS, c);
+	if (c->pid < 0) {
+		fprintf(stderr, "Cannot clone process, return PID %ld\n", c->pid);
+	}
 	return c;
 }
 
@@ -32,7 +34,6 @@ static int init_function(void *argv) {
 }
 
 #define UUID_SIZE 37
-
 static char *generate_container_id() {
 	FILE *uuid_source = fopen("/proc/sys/kernel/random/uuid", "r");
 	char *container_id = malloc(UUID_SIZE);
