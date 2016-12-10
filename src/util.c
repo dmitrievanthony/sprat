@@ -1,6 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -12,7 +15,7 @@ int copy_file(char *src, char *dst) {
 	int src_fd = open(src, O_RDONLY);
 	int dst_fd = open(dst, O_WRONLY | O_CREAT | O_EXCL, DST_FILE_MODE);
 	if (src_fd > 0 && dst_fd > 0) {
-		if (fstat(src_fd, &st) > 0) {
+		if (fstat(src_fd, &st) == 0) {
 			void *mem = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, src_fd, 0);
 			if (mem > 0) {
 				if (write(dst_fd, mem, st.st_size) == st.st_size) {

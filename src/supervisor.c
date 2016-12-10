@@ -11,7 +11,7 @@ static void check_arguments(int argc, char **argv);
 int main(int argc, char **argv) {
 	check_arguments(argc, argv);
 	printf("Supervisor started\n");
-	if (run_container(argv[1], argv[2]) == 0) {
+	if (run_container(argv[1], "ext4", argv[2]) == 0) {
 		printf("Supervisor finished\n");
 		return 0;
 	}
