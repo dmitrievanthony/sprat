@@ -21,7 +21,7 @@ char *mount_loopfs(char *img, char *target, char *fstype) {
 				return loop_device;
 			}
 			else {
-				fprintf(stderr, "Canot mount %s on %s (return code %d)\n", loop_device, target, errno);
+				fprintf(stderr, "Canot mount %s on %s with fstype %s (return code %d)\n", loop_device, target, fstype, errno);
 				detach_loop_device(loop_device);
 			}
 		}
@@ -47,7 +47,7 @@ static char *find_free_loop_device() {
 	int loop_control = open("/dev/loop-control", O_RDWR);
 	if (loop_control > 0) {
 		int free_loop_device_number = ioctl(loop_control, LOOP_CTL_GET_FREE);
-        if (free_loop_device_number > 0) {
+        if (free_loop_device_number >= 0) {
 			sprintf(loop_device_name, "/dev/loop%d", free_loop_device_number);
 			close(loop_control);
             return loop_device_name;
@@ -62,9 +62,9 @@ static char *find_free_loop_device() {
  
 static int attach_loop_device(char *loop_device, char *file) {
 	int loop_device_fd = open(loop_device, O_RDWR);
-	if (loop_device_fd > 0) {
+	if (loop_device_fd >= 0) {
 		int file_fd = open(file, O_RDWR);
-		if (file_fd > 0) {
+		if (file_fd >=0 ) {
 			if (ioctl(loop_device_fd, LOOP_SET_FD, file_fd) == 0) {	
 				close(file_fd);
 				close(loop_device_fd);
@@ -72,7 +72,7 @@ static int attach_loop_device(char *loop_device, char *file) {
 			}
 			else fprintf(stderr, "Cannot attach %s to loop device %s (return code %d)\n", file, loop_device, errno);
 		}
-		else fprintf(stderr, "Cannot open file %s\n", file);
+		else fprintf(stderr, "Cannot open file %s (return code %d)\n", file, errno);
 		close(file_fd);
 	}
 	else fprintf(stderr, "Cannot open loop device file %s\n", loop_device);

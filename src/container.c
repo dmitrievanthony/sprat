@@ -36,7 +36,7 @@ static int init_container(struct container *c);
 static char *generate_container_id();
 
 #define STACK_SIZE  1024 * 1024
-#define CLONE_FLAGS SIGCHLD | CLONE_NEWPID | CLONE_NEWNS
+#define CLONE_FLAGS SIGCHLD | CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWNS
 int run_container(char *base_image, char *fstype, char *init_script) {
 	struct container c;
 	c.base_image = base_image;
@@ -49,8 +49,9 @@ int run_container(char *base_image, char *fstype, char *init_script) {
 	}
 	c.pid = clone(init_function, malloc(STACK_SIZE) + STACK_SIZE, CLONE_FLAGS, &c);
 	if (c.pid > 0) {
-		if (waitpid(c.pid, NULL, 0) == 0) {
-			return destroy_container_env(&c);
+		if (waitpid(c.pid, NULL, 0) == c.pid) {
+			return 0;
+			// return destroy_container_env(&c); TODO: here some problems with unmount fs mounter in child process
 		}
 		else fprintf(stderr, "Cannot wait container %s process with PID %ld\n", c.id, c.pid);
 	}
@@ -61,9 +62,13 @@ int run_container(char *base_image, char *fstype, char *init_script) {
 
 static int init_function(void *argv) {
 	struct container *c = (struct container *) argv;
-	printf("Container %s started from base image %s with init script %s\n", c->id, c->base_image, c->init_script);
+	printf("Container %s started (base image %s)\n", c->id, c->base_image);
 	if (init_container(c) == 0) {
-		return system(c->init_script);
+		if (system(c->init_script) == 0) {
+			printf("Container %s finished\n", c->id);
+			return 0;
+		}
+		else fprintf(stderr, "Container finished with exception\n");
 	}
 	else fprintf(stderr, "Cannot initialize container %s\n", c->id);
 	return -1;
@@ -81,7 +86,6 @@ static char *generate_container_id() {
 
 /* Initializes container from supervisor process perspective (should be called before clone() in parent process), 
    creates runtime image and container folder. */
-#define CONTAINER_MNT_DIR_MODE 666
 static int init_container_env(struct container *c) {
 	c->env = malloc(sizeof(struct container_env));
 	c->env->image = malloc(strlen(c->id) + 5);
@@ -89,7 +93,7 @@ static int init_container_env(struct container *c) {
 	sprintf(c->env->image, ".%s.img", c->id);
 	sprintf(c->env->mnt_dir, ".%s", c->id);
 	int copy_img_res = copy_file(c->base_image, c->env->image);
-	int mk_mnt_dir_res = mkdir(c->env->mnt_dir, CONTAINER_MNT_DIR_MODE);
+	int mk_mnt_dir_res = mkdir(c->env->mnt_dir, S_IRWXU);
 	return copy_img_res == 0 && (mk_mnt_dir_res == 0 || mk_mnt_dir_res == EEXIST) ? 0 : -1;
 }
 
@@ -104,17 +108,20 @@ static int destroy_container_env(struct container *c) {
 /* Initializes container in child process (with new namespaces, etc..), attaches loop filesystem of runtime 
    image to the container directory and changes root to the container directory after that. */
 #define OLD_ROOT_DIR ".old_root"
-#define OLD_ROOT_DIR_MODE 666
 static int init_container(struct container *c) {
 	c->env->loop_device = mount_loopfs(c->env->image, c->env->mnt_dir, c->fstype);
 	if (c->env->loop_device > 0) {
 		if (chdir(c->env->mnt_dir) == 0) {
-			int mk_old_root_dir_res = mkdir(OLD_ROOT_DIR, OLD_ROOT_DIR_MODE);
-			if (mk_old_root_dir_res == 0 || mk_old_root_dir_res == EEXIST) {
-				if (syscall(SYS_pivot_root, ".", OLD_ROOT_DIR) == 0) {
-					return chdir("/");
-				}
-				else fprintf(stderr, "Cannot change root (return code %d)\n", errno);
+			int mk_old_root_dir_res = 0; // mkdir(OLD_ROOT_DIR, S_IRWXU);
+			if (mk_old_root_dir_res == 0) {
+				chroot(".");
+				// TODO: pivot_root always return 22 (Illegal argument)
+				//
+				// if (syscall(SYS_pivot_root, ".", OLD_ROOT_DIR) == 0) {
+				// 	return chdir("/");
+				// }
+				// else fprintf(stderr, "Cannot change root (return code %d)\n", errno);
+				return 0;
 			}
 			else fprintf(stderr, "Cannot create directory .%s/%s\n", c->id, OLD_ROOT_DIR);
 		}
