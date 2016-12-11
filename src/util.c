@@ -14,7 +14,7 @@ int copy_file(char *src, char *dst) {
 		int dst_fd = open(dst, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 		if (dst_fd != -1) {
 			if (fstat(src_fd, &st) == 0) {
-            	void *mem = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, src_fd, 0);
+				void *mem = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, src_fd, 0);
 				if (mem != MAP_FAILED) {
 					if (write(dst_fd, mem, st.st_size) == st.st_size) {
 						munmap(mem, st.st_size);
