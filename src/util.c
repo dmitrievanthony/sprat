@@ -2,11 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <sys/mman.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
 int copy_file(char *src, char *dst) {
@@ -17,23 +15,23 @@ int copy_file(char *src, char *dst) {
 		if (dst_fd != -1) {
 			if (fstat(src_fd, &st) == 0) {
             	void *mem = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, src_fd, 0);
-            	if (mem != MAP_FAILED) {
-                	if (write(dst_fd, mem, st.st_size) == st.st_size) {
-                    	munmap(mem, st.st_size);
-                    	close(src_fd);
-                    	close(dst_fd);
-                    	return 0;
-                	}
-               	 	else {
+				if (mem != MAP_FAILED) {
+					if (write(dst_fd, mem, st.st_size) == st.st_size) {
+						munmap(mem, st.st_size);
+						close(src_fd);
+						close(dst_fd);
+						return 0;
+					}
+					else {
 						fprintf(stderr, "Cannot write file %s (error code %d)\n", dst, errno);
 					}
-					munmap(mem, st.st_size);
-            	}
-            	else {
+				munmap(mem, st.st_size);
+				}
+				else {
 					fprintf(stderr, "Cannot mmap file %s (error code %d)\n", src, errno);
 				}
-        	}
-        	else {
+			}
+			else {
 				fprintf(stderr, "Cannot get size of file %s (return code %d)\n", src, errno);
 			}
 			close(dst_fd);
