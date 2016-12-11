@@ -25,7 +25,7 @@ int copy_file(char *src, char *dst) {
 					else {
 						fprintf(stderr, "Cannot write file %s (error code %d)\n", dst, errno);
 					}
-				munmap(mem, st.st_size);
+					munmap(mem, st.st_size);
 				}
 				else {
 					fprintf(stderr, "Cannot mmap file %s (error code %d)\n", src, errno);
