@@ -18,7 +18,6 @@ int main(int argc, char **argv) {
 		printf("Supervisor finished\n");
 		return 0;
 	}
-	else fprintf(stderr, "Cannot start container\n");
 	return -1;
 }
 

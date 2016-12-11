@@ -21,41 +21,44 @@ char *mount_loopfs(char *img, char *target, char *fstype) {
 				return loop_device;
 			}
 			else {
-				fprintf(stderr, "Canot mount %s on %s with fstype %s (return code %d)\n", loop_device, target, fstype, errno);
+				fprintf(stderr, "Canot mount loop device %s on %s with fstype %s (return code %d)\n", loop_device, target, fstype, errno);
 				detach_loop_device(loop_device);
 			}
 		}
-		else fprintf(stderr, "Cannot attach %s to loop device %s\n", img, loop_device);
 	}
-	else fprintf(stderr, "Cannot find free loop device\n");
 	return (char *) -1;
 }
  
 /* Unmount the target directory and then detaches any file from the loop device. */
 int umount_loop_filesystem(char *loop_device, char *target) {
 	if (umount(target) == 0) {
-		if (detach_loop_device(loop_device) == 0) return 0;
-		else fprintf(stderr, "Cannot detach loop device %s\n", loop_device);
+		return detach_loop_device(loop_device);
 	}
-	else fprintf(stderr, "Cannot umount %s\n", target);
+	else {
+		fprintf(stderr, "Cannot umount %s (return code %d)\n", target, errno);
+	}
 	return -1;
 }
  
 #define LOOP_DEVICE_NAME_MAX_SIZE 20
 static char *find_free_loop_device() {
 	char *loop_device_name = malloc(LOOP_DEVICE_NAME_MAX_SIZE);
-	int loop_control = open("/dev/loop-control", O_RDWR);
-	if (loop_control > 0) {
-		int free_loop_device_number = ioctl(loop_control, LOOP_CTL_GET_FREE);
+	int loop_control_fd = open("/dev/loop-control", O_RDWR);
+	if (loop_control_fd > 0) {
+		int free_loop_device_number = ioctl(loop_control_fd, LOOP_CTL_GET_FREE);
         if (free_loop_device_number >= 0) {
 			sprintf(loop_device_name, "/dev/loop%d", free_loop_device_number);
-			close(loop_control);
+			close(loop_control_fd);
             return loop_device_name;
         }
-        else fprintf(stderr, "Cannot find free loop device\n");
+		else {
+			fprintf(stderr, "Cannot find free loop device (return code %d)\n", errno);
+		}
+		close(loop_control_fd);
 	}
-	else fprintf(stderr, "Cannot open loop control (/dev/loop_control)\n");
-	close(loop_control);
+	else {
+		fprintf(stderr, "Cannot open /dev/loop_control (return code %d)\n", errno);
+	}
 	free(loop_device_name);
 	return (char *) -1;
 }
@@ -70,13 +73,19 @@ static int attach_loop_device(char *loop_device, char *file) {
 				close(loop_device_fd);
 				return 0;
 			}
-			else fprintf(stderr, "Cannot attach %s to loop device %s (return code %d)\n", file, loop_device, errno);
+			else {
+				fprintf(stderr, "Cannot attach file %s to loop device %s (return code %d)\n", file, loop_device, errno);
+			}
+			close(file_fd);
 		}
-		else fprintf(stderr, "Cannot open file %s (return code %d)\n", file, errno);
-		close(file_fd);
+		else {
+			fprintf(stderr, "Cannot open file %s (return code %d)\n", file, errno);
+		}
+		close(loop_device_fd);
 	}
-	else fprintf(stderr, "Cannot open loop device file %s\n", loop_device);
-    close(loop_device_fd);
+	else {
+		fprintf(stderr, "Cannot open loop device %s (return code %d)\n", loop_device, errno);
+	}
     return -1;
 }
  
@@ -87,9 +96,13 @@ static int detach_loop_device(char *loop_device) {
 			close(loop_device_fd);
 			return 0;
 		}
-		else fprintf(stderr, "Cannot detach file from loop device %s\n", loop_device);
+		else {
+			fprintf(stderr, "Cannot detach file from loop device %s (return code %d)\n", loop_device, errno);
+		}
+		close(loop_device_fd);
 	}
-	else fprintf(stderr, "Cannot open loop device %s\n", loop_device);
-	close(loop_device_fd);
+	else {
+		fprintf(stderr, "Cannot open loop device %s (return code %d)\n", loop_device, errno);
+	}
 	return -1;
 }

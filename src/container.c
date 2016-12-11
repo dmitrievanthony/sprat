@@ -14,19 +14,15 @@
 #include "util.h"
 #include "loopfs.h"
 
-struct container_env {
-    char *image;
-    char *mnt_dir;
-	char *loop_device;
-};
-
 struct container {
     char *base_image;
 	char *fstype;
     char *init_script;
     char *id;
     long pid;
-	struct container_env *env;
+	char *image;
+	char *mnt_dir;
+	char *loop_device;
 };
 
 static int init_function(void *argv);
@@ -43,20 +39,23 @@ int run_container(char *base_image, char *fstype, char *init_script) {
 	c.fstype = fstype;
 	c.init_script = init_script;
 	c.id = generate_container_id();
-	if (init_container_env(&c) < 0) {
-		fprintf(stderr, "Cannot initialize %s container environment\n", c.id);
-		return -1;
-	}
-	c.pid = clone(init_function, malloc(STACK_SIZE) + STACK_SIZE, CLONE_FLAGS, &c);
-	if (c.pid > 0) {
-		if (waitpid(c.pid, NULL, 0) == c.pid) {
-			return 0;
-			// return destroy_container_env(&c); TODO: here some problems with unmount fs mounter in child process
+	if (c.id != (char *) -1) {
+		if (init_container_env(&c) == 0) {
+			c.pid = clone(init_function, malloc(STACK_SIZE) + STACK_SIZE, CLONE_FLAGS, &c);
+			if (c.pid != -1) {
+				if (waitpid(c.pid, NULL, 0) == c.pid) {
+				 	return destroy_container_env(&c);
+				}
+				else {
+					fprintf(stderr, "Cannot wait child process with PID %ld (return code %d)\n", c.pid, errno);
+				}
+			}
+			else {
+				fprintf(stderr, "Cannot clone process (return code %d)\n", errno);
+			}
+			destroy_container_env(&c);
 		}
-		else fprintf(stderr, "Cannot wait container %s process with PID %ld\n", c.id, c.pid);
 	}
-	else fprintf(stderr, "Cannot clone container %s process, return PID %ld\n", c.id, c.pid);
-	destroy_container_env(&c);
 	return -1;
 }
 
@@ -68,52 +67,73 @@ static int init_function(void *argv) {
 			printf("Container %s finished\n", c->id);
 			return 0;
 		}
-		else fprintf(stderr, "Container finished with exception\n");
+		else fprintf(stderr, "Container finished with error (return code %d)\n", errno);
 	}
-	else fprintf(stderr, "Cannot initialize container %s\n", c->id);
 	return -1;
 }
 
-/* Generates container ID base on UUID. */
 #define UUID_SIZE 37
 static char *generate_container_id() {
 	FILE *uuid_source = fopen("/proc/sys/kernel/random/uuid", "r");
-	char *container_id = malloc(UUID_SIZE);
-	fgets(container_id, UUID_SIZE, uuid_source);
-	fclose(uuid_source);
-	return container_id;
+	if (uuid_source != NULL) {
+		char *container_id = malloc(UUID_SIZE);
+		fgets(container_id, UUID_SIZE, uuid_source);
+		if (errno == 0) {
+			fclose(uuid_source);
+			return container_id;
+		}
+		else {
+			fprintf(stderr, "Cannot get content of /proc/sys/kernel/random/uuid (return code %d)\n", errno);
+		}
+		free(container_id);
+		fclose(uuid_source);
+	}
+	else {
+		fprintf(stderr, "Cannot fopen /proc/sys/kernel/random/uuid (return code %d)\n", errno);
+	}
+	return (char *) -1;
 }
 
-/* Initializes container from supervisor process perspective (should be called before clone() in parent process), 
-   creates runtime image and container folder. */
 static int init_container_env(struct container *c) {
-	c->env = malloc(sizeof(struct container_env));
-	c->env->image = malloc(strlen(c->id) + 5);
-	c->env->mnt_dir = malloc(strlen(c->id) + 1);
-	sprintf(c->env->image, ".%s.img", c->id);
-	sprintf(c->env->mnt_dir, ".%s", c->id);
-	int copy_img_res = copy_file(c->base_image, c->env->image);
-	int mk_mnt_dir_res = mkdir(c->env->mnt_dir, S_IRWXU);
-	return copy_img_res == 0 && (mk_mnt_dir_res == 0 || mk_mnt_dir_res == EEXIST) ? 0 : -1;
+	c->image = malloc(strlen(c->id) + 5);
+	c->mnt_dir = malloc(strlen(c->id) + 1);
+	sprintf(c->image, ".%s.img", c->id);
+	sprintf(c->mnt_dir, ".%s", c->id);
+	if (copy_file(c->base_image, c->image) == 0) {
+		if (mkdir(c->mnt_dir, S_IRWXU) == 0) {
+			return 0;
+		}
+		else {
+			fprintf(stderr, "Cannot create directory %s (return code %d)\n", c->mnt_dir, errno);
+		}
+	}
+	free(c->image);
+	free(c->mnt_dir);
+	return -1;
 }
 
-/* Destroys container artifacts: runtime image and container folder (should be called in parent process). */
 static int destroy_container_env(struct container *c) {
-	int rm_image_res = unlink(c->env->image);
-	int rm_mnt_dir = rmdir(c->env->mnt_dir);
-	return ((rm_image_res == 0 || rm_image_res == ENOENT) && 
-		(rm_mnt_dir == 0 || rm_mnt_dir == ENOENT)) ? 0 : -1;
+	int rm_image_res = unlink(c->image);
+	int rm_mnt_dir = rmdir(c->mnt_dir);
+	if ((rm_image_res == 0 || rm_image_res == ENOENT) && (rm_mnt_dir == 0 || rm_mnt_dir == ENOENT)) {
+		return 0;
+	}
+	else {
+		if (rm_image_res != 0 && rm_image_res != ENOENT) {
+			fprintf(stderr, "Cannot remove file %s (return code %d)\n", c->image, rm_image_res);
+		}
+		if (rm_mnt_dir != 0 && rm_mnt_dir != ENOENT) {
+			fprintf(stderr, "Cannot remove directory %s (return code %d)\n", c->mnt_dir, rm_mnt_dir);
+		}
+	}
+	return -1;
 }
 
-/* Initializes container in child process (with new namespaces, etc..), attaches loop filesystem of runtime 
-   image to the container directory and changes root to the container directory after that. */
-#define OLD_ROOT_DIR ".old_root"
 static int init_container(struct container *c) {
-	c->env->loop_device = mount_loopfs(c->env->image, c->env->mnt_dir, c->fstype);
-	if (c->env->loop_device > 0) {
-		if (chdir(c->env->mnt_dir) == 0) {
-			int mk_old_root_dir_res = 0; // mkdir(OLD_ROOT_DIR, S_IRWXU);
-			if (mk_old_root_dir_res == 0) {
+	c->loop_device = mount_loopfs(c->image, c->mnt_dir, c->fstype);
+	if (c->loop_device != (char *) -1) {
+		if (chdir(c->mnt_dir) == 0) {
+			if (mkdir(".root", S_IRWXU) == 0) {
 				chroot(".");
 				// TODO: pivot_root always return 22 (Illegal argument)
 				//
@@ -123,10 +143,13 @@ static int init_container(struct container *c) {
 				// else fprintf(stderr, "Cannot change root (return code %d)\n", errno);
 				return 0;
 			}
-			else fprintf(stderr, "Cannot create directory .%s/%s\n", c->id, OLD_ROOT_DIR);
+			else {
+				fprintf(stderr, "Cannot create directory .%s/.root (return code %d)\n", c->id, errno);
+			}
 		}
-		else fprintf(stderr, "Cannot change directory to %s\n", c->env->mnt_dir);
+		else {
+			fprintf(stderr, "Cannot change directory to %s (return code %d)\n", c->mnt_dir, errno);
+		}
 	}
-	else fprintf(stderr, "Cannot mount loop filesystem\n");
 	return -1;
 }
