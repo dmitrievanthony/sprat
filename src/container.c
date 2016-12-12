@@ -64,7 +64,6 @@ static int init_function(void *argv) {
 	struct container *c = (struct container *) argv;
 	printf("Container %s started (base image %s)\n", c->id, c->base_image);
 	if (init_container(c) != 0) {
-		fprintf(stderr, "Container finished with error (error code %d)\n", errno);
 		return -1;
 	}
 	if (system(c->init_script) != 0) {
@@ -175,17 +174,17 @@ static int init_container(struct container *c) {
 		fprintf(stderr, "Cannot create directory /etc (error code %d)\n", errno);
 		return -1;
 	}
-	if (!(create_and_mount("none", "/proc", "proc", MS_NOEXEC | MS_NOSUID | MS_NODEV, "") && 
-		create_and_mount("none", "/dev", "tmpfs", MS_NOEXEC | MS_STRICTATIME, "mode=755") &&
-		create_and_mount("none", "/dev/shm", "tmpfs", MS_NOEXEC | MS_NOSUID | MS_NODEV, "mode=1777,size=65536k") &&
-		create_and_mount("none", "/dev/mqueue", "mqueue", MS_NOEXEC | MS_NOSUID | MS_NODEV, "") &&
-		create_and_mount("none", "/dev/pts", "devpts", MS_NOEXEC | MS_NOSUID, "newinstance,ptmxmode=0666,mode=620,gid=5") &&
-		create_and_mount("none", "/sys", "sysfs", MS_NOEXEC | MS_NOSUID | MS_NODEV | MS_RDONLY, "") &&
-		create_symlink("/proc/self/fd", "/dev/fd") &&
-		create_symlink("/proc/self/fd/0", "/dev/stdin") &&
-		create_symlink("/proc/self/fd/1", "/dev/stdout") &&
-		create_symlink("/proc/self/fd/2", "/dev/stderr") &&
-		create_symlink("/proc/mounts", "/etc/mtab"))) {
+	if (!(!create_and_mount("none", "/proc", "proc", MS_NOEXEC | MS_NOSUID | MS_NODEV, "") && 
+		!create_and_mount("none", "/dev", "tmpfs", MS_NOEXEC | MS_STRICTATIME, "mode=755") &&
+		!create_and_mount("none", "/dev/shm", "tmpfs", MS_NOEXEC | MS_NOSUID | MS_NODEV, "mode=1777,size=65536k") &&
+		!create_and_mount("none", "/dev/mqueue", "mqueue", MS_NOEXEC | MS_NOSUID | MS_NODEV, "") &&
+		!create_and_mount("none", "/dev/pts", "devpts", MS_NOEXEC | MS_NOSUID, "newinstance,ptmxmode=0666,mode=620,gid=5") &&
+		!create_and_mount("none", "/sys", "sysfs", MS_NOEXEC | MS_NOSUID | MS_NODEV | MS_RDONLY, "") &&
+		!create_symlink("/proc/self/fd", "/dev/fd") &&
+		!create_symlink("/proc/self/fd/0", "/dev/stdin") &&
+		!create_symlink("/proc/self/fd/1", "/dev/stdout") &&
+		!create_symlink("/proc/self/fd/2", "/dev/stderr") &&
+		!create_symlink("/proc/mounts", "/etc/mtab"))) {
 		return -1;
 	}
 	return 0;
