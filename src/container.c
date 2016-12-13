@@ -191,6 +191,7 @@ static int init_container(struct container *c) {
 }
 
 static int destroy_container(struct container *c) {
-	return umount_loopfs(c->loop_device, c->mnt_dir);
+	return 0;
+	// return umount_loopfs(c->loop_device, c->mnt_dir);
 }
 
