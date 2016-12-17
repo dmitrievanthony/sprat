@@ -8,9 +8,10 @@
 #include <sys/mount.h>
 #include <linux/loop.h>
 
+#include "loopfs.h"
+
 static char *find_free_loop_device();
 static int attach_loop_device(char *loop_device_name, char *file_name);
-static int detach_loop_device(char *loop_device_name);
 
 char *mount_loopfs(char *img, char *target, char *fstype) {
 	char *loop_device = find_free_loop_device();
@@ -30,12 +31,27 @@ char *mount_loopfs(char *img, char *target, char *fstype) {
 	return loop_device;
 }
  
-int umount_loopfs(char *loop_device, char *target) {
+int umount_loopfs(char *target) {
 	if (umount(target) != 0) {
 		fprintf(stderr, "Cannot umount %s (error code %d)\n", target, errno);
 		return -1;
 	}
-	return detach_loop_device(loop_device);
+	return 0;
+}
+
+int detach_loop_device(char *loop_device) {
+        int loop_device_fd = open(loop_device, O_RDWR);
+        if (loop_device_fd < 0) {
+                fprintf(stderr, "Cannot open loop device %s (error code %d)\n", loop_device, errno);
+                return -1;
+        }
+        if (ioctl(loop_device_fd, LOOP_CLR_FD) != 0) {
+                fprintf(stderr, "Cannot detach file from loop device %s (error code %d)\n", loop_device, errno);
+                close(loop_device_fd);
+                return -1;
+        }
+        close(loop_device_fd);
+        return 0;
 }
  
 #define LOOP_DEVICE_NAME_MAX_SIZE 20
@@ -76,21 +92,6 @@ static int attach_loop_device(char *loop_device, char *file) {
 		return -1;
 	}
 	close(file_fd);
-	close(loop_device_fd);
-	return 0;
-}
- 
-static int detach_loop_device(char *loop_device) {
-	int loop_device_fd = open(loop_device, O_RDWR);
-	if (loop_device_fd < 0) {
-		fprintf(stderr, "Cannot open loop device %s (error code %d)\n", loop_device, errno);
-		return -1;
-	}
-	if (ioctl(loop_device_fd, LOOP_CLR_FD) != 0) {
-		fprintf(stderr, "Cannot detach file from loop device %s (error code %d)\n", loop_device, errno);
-		close(loop_device_fd);
-		return -1;
-	}
 	close(loop_device_fd);
 	return 0;
 }

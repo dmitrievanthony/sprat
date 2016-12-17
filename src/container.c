@@ -154,16 +154,16 @@ static int create_symlink(const char *source, const char *target) {
 }
 
 static int init_container(struct container *c) {
+	if (mount("/", "/", NULL, MS_PRIVATE, "") < 0) {
+		fprintf(stderr, "Cannot set MS_PRIVATE flag to root filesystem (error code %d)\n", errno);
+		return -1;
+	}
 	c->loop_device = mount_loopfs(c->image, c->mnt_dir, c->fstype);
 	if (c->loop_device < 0) {
 		return -1;
 	}
 	if (chdir(c->mnt_dir) < 0) {
-		fprintf(stderr, "Cannot create directory .%s/.root (error code %d)\n", c->id, errno);
-		return -1;
-	}
-	if (mkdir(".root", S_IRWXU) < 0 && errno != EEXIST) {
-		fprintf(stderr, "Cannot create directory .%s/.root (error code %d)\n", c->id, errno);
+		fprintf(stderr, "Cannot change directory to %s (error code %d)\n", c->mnt_dir, errno);
 		return -1;
 	}
 	if (chroot(".") < 0) {
@@ -192,6 +192,5 @@ static int init_container(struct container *c) {
 
 static int destroy_container(struct container *c) {
 	return 0;
-	// return umount_loopfs(c->loop_device, c->mnt_dir);
 }
 
