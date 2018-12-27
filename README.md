@@ -1,4 +1,4 @@
-# Sprat
+# Sprat [![Build Status](https://travis-ci.org/dmitrievanthony/sprat.svg?branch=master)](https://travis-ci.org/dmitrievanthony/sprat) #
 
 *Sprat* is a lightweight container and allows to run your code in isolated environment. It's simple:
 
