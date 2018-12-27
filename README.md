@@ -2,7 +2,7 @@
 
 *Sprat* is a lightweight container and allows to run your code in isolated environment. It's simple:
 
-```
+```bash
 ubuntu@ip-172-31-31-112:~/sprat$ sudo ./sprat base_image.img bash
 Supervisor started
 Container 8ddb51c4-b0f7-4db0-ac83-4b8b39e7dcd0 started (base image base_image.img)
